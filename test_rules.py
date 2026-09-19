@@ -179,14 +179,25 @@ def test_binary_files_carry_a_note_instead_of_line_counts():
 
 
 def test_name_status_and_numstat_are_joined_on_path():
+    # numstat writes renames the way git actually writes them, in one field.
     changes = gitio._file_changes(
         "M\tsrc/a.py\nA\tsrc/b.py\nR100\tsrc/old.py\tsrc/new.py\n",
-        "3\t1\tsrc/a.py\n40\t0\tsrc/b.py\n0\t0\tsrc/new.py\n",
+        "3\t1\tsrc/a.py\n40\t0\tsrc/b.py\n2\t0\tsrc/{old.py => new.py}\n",
     )
     by_path = {c.path: c for c in changes}
     assert by_path["src/a.py"].added == 3 and by_path["src/a.py"].removed == 1
     assert by_path["src/new.py"].old_path == "src/old.py"
     assert by_path["src/new.py"].status.startswith("R")
+    assert by_path["src/new.py"].added == 2, "a rename is not a binary file"
+    assert not by_path["src/new.py"].binary
+
+
+def test_numstat_rename_paths_of_every_shape():
+    assert gitio.numstat_path("src/a.py") == "src/a.py"
+    assert gitio.numstat_path("old.py => new.py") == "new.py"
+    assert gitio.numstat_path("app/{client.py => upstream.py}") == "app/upstream.py"
+    assert gitio.numstat_path("{pkg => app}/mod.py") == "app/mod.py"
+    assert gitio.numstat_path("{ => app}/mod.py") == "app/mod.py"
 
 
 def main() -> int:

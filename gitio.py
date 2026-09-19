@@ -155,13 +155,32 @@ def read_staged(cwd: Path, message: str) -> Commit:
     return commit
 
 
+def numstat_path(field: str) -> str:
+    """Recover the new path from a numstat path field.
+
+    numstat writes a rename as a single field while name-status splits it in
+    two, so joining the two on their last column silently misses every renamed
+    file and reports it as binary. git writes the rename either in full,
+    "old.py => new.py", or with the unchanged part of the path factored out,
+    "app/{client.py => upstream.py}" and "{pkg => app}/mod.py".
+    """
+    if "=>" not in field:
+        return field
+    if "{" in field and "}" in field:
+        before, _, rest = field.partition("{")
+        inner, _, after = rest.partition("}")
+        new = inner.partition("=>")[2].strip()
+        return (before + new + after).replace("//", "/").lstrip("/")
+    return field.partition("=>")[2].strip()
+
+
 def _file_changes(name_status: str, numstat: str) -> list[FileChange]:
     counts: dict[str, tuple[int | None, int | None]] = {}
     for line in numstat.splitlines():
         parts = line.split("\t")
         if len(parts) < 3:
             continue
-        add, rem, path = parts[0], parts[1], parts[-1]
+        add, rem, path = parts[0], parts[1], numstat_path(parts[-1])
         counts[path] = (
             (None, None) if add == "-" else (int(add), int(rem))
         )
