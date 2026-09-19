@@ -1,0 +1,18 @@
+#!/bin/sh
+# commitjev as a commit-msg hook. Copy it in yourself:
+#
+#   cp jevtools/commitjev/hooks/commit-msg .git/hooks/commit-msg
+#   chmod +x .git/hooks/commit-msg
+#
+# git passes the message file as $1, and the changes are already staged, so the
+# hook sees exactly the commit about to be made. A non-zero exit stops it.
+#
+# It warns and stops by default. To let it speak without blocking, drop the
+# "|| exit 1" below. To make anything Jev was unsure about stop the commit too,
+# add --strict.
+
+COMMITJEV="$(git rev-parse --show-toplevel)/jevtools/commitjev/commitjev.py"
+
+[ -x "$COMMITJEV" ] || exit 0          # not installed here, do not block anyone
+
+python3 "$COMMITJEV" --staged --message-file "$1" || exit 1
