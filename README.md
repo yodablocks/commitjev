@@ -96,23 +96,31 @@ a false alarm.
 ```
 rule                      own defect  other defects   clean  margin  fires
 --------------------------------------------------------------------------
-message matches diff       0.02 0.04           0.23    0.95    0.93  yes
-one logical change              0.16           0.17    0.95    0.79  yes
-hidden change                   0.96           0.98    0.12    0.84  yes
-unexplained removal             0.76           0.83    0.07    0.69  yes
-debug leftovers                 0.97           0.47    0.04    0.93  yes
-new dependency                  0.98           0.07    0.06    0.92  yes
+message matches diff       0.02 0.04           0.24    0.95    0.93  yes
+one logical change              0.15           0.16    0.96    0.81  yes
+hidden change                   0.96           0.98    0.11    0.85  yes
+unexplained removal             0.98           0.22    0.98    0.00  yes, composed
+debug leftovers                 0.97           0.47    0.05    0.92  yes
+new dependency                  0.99           0.07    0.06    0.93  yes
 credential in diff              0.96           0.03    0.03    0.93  yes
 ```
 
-Every rule fires on its defect, with 0.69 to 0.93 of margin against the clean
-commits, and nothing fires on a clean one. Two of the five clean cases carry a
-one-line message over the same diff as a longer one, because a short accurate
-message is the commonest real commit and the likeliest false alarm for the
-message rule. Both pass.
+Every rule fires on its defect and nothing fires on a clean commit. Six of the
+seven separate on the probability alone, by 0.81 to 0.93. The seventh is
+marked composed: `unexplained_removal` answers 0.98 on the commit that deletes
+a function and 0.98 on the commit that deletes the same function and says why,
+because all it asks is whether something went. `removal_explained` tells them
+apart, in code, which is why the table reports verdicts rather than deriving
+them from the number beside them.
+
+Two of the six clean cases carry a one-line message over the same diff as a
+longer one, because a short accurate message is the commonest real commit and
+the likeliest false alarm for the message rule. A third removes a function and
+explains it, so the composed rule is tested on the side that should stay quiet.
+All six pass.
 
 The Choice names the planted defect on six of the eight defective commits and
-says "none" on all five clean ones at 0.91 confidence and above.
+says "none" on all six clean ones at 0.92 confidence and above.
 
 ## A run over real history
 
