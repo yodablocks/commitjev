@@ -134,8 +134,8 @@ def per_case_table(reports: dict[str, rules.CommitReport]) -> int:
     """Did each case get the verdict its label says it should?"""
     by_case = {c.name: c for c in case_data.CASES}
     wrong = 0
-    print(f"\n{'case':<18}{'defect':<24}{'verdict':<10}fired")
-    print("-" * 80)
+    print(f"\n{'case':<20}{'defect':<24}{'verdict':<10}fired")
+    print("-" * 92)
     for name, report in reports.items():
         case = by_case[name]
         fired = [r.rule.id for r in report.results if r.verdict == rules.WARN]
@@ -143,9 +143,35 @@ def per_case_table(reports: dict[str, rules.CommitReport]) -> int:
         ok = (case.defect in fired) if case.defect else not fired
         if not ok:
             wrong += 1
-        print(f"{name:<18}{case.defect or 'none':<24}{report.verdict:<10}"
+        print(f"{name:<20}{case.defect or 'none':<24}{report.verdict:<10}"
               f"{', '.join(fired) or '-'}{'' if ok else '   <- not as labelled'}")
     return wrong
+
+
+def headline_table(reports: dict[str, rules.CommitReport]) -> None:
+    """Does the Choice name the right defect when several rules fire at once?
+
+    This is the only thing the Choice is for. The Nouls each answer in
+    isolation, so a commit with one real problem often trips four of them, and
+    the Choice is the question that asks which one a reviewer would actually
+    raise. If it cannot name the planted defect, it is decoration.
+    """
+    by_case = {c.name: c for c in case_data.CASES}
+    right = considered = 0
+    print(f"\n{'case':<20}{'defect':<24}{'headline':<24}{'conf':>6}  spoke")
+    print("-" * 92)
+    for name, report in reports.items():
+        case = by_case[name]
+        spoke = report.headline_text is not None
+        agrees = report.headline == case.defect
+        if case.defect:
+            considered += 1
+            right += agrees and spoke
+        flag = "yes" if spoke else f"no, under {rules.HEADLINE_CONFIDENCE:.2f}"
+        print(f"{name:<20}{case.defect or 'none':<24}{report.headline or '-':<24}"
+              f"{report.headline_confidence:>6.2f}  {flag}")
+    print(f"\nthe Choice named the planted defect on {right}/{considered} "
+          f"defective commits")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -171,6 +197,7 @@ def main(argv: list[str] | None = None) -> int:
 
         misses, alarms = separation_table(reports)
         wrong = per_case_table(reports)
+        headline_table(reports)
         elapsed = time.time() - started
         print(
             f"\n{len(reports)} cases, {len(rules.JEV_RULES) - misses}"
