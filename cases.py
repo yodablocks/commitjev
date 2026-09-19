@@ -5,6 +5,10 @@ one defect or none. The defect is the rule that should fire. Everything else
 about the commit is meant to look ordinary, because a defect that only shows up
 in an obviously broken commit tells you nothing about real ones.
 
+Two of the clean cases carry a one-line message over the same diff as a
+longer one, because a short accurate message is the commonest real commit and
+the likeliest thing for the message rule to mistake for a vague one.
+
 These are written by hand, so they measure whether a rule can fire at all and
 where it sits relative to clean commits. They are not a sample of anyone's real
 history and the separations they produce are not accuracy numbers.
@@ -172,6 +176,42 @@ def test_validate_rejects_a_string():
         return
     raise AssertionError("expected ValueError")
 ''',
+        },
+    ),
+    Case(
+        name="clean_terse_code",
+        defect=None,
+        message="Wait a second between retry attempts",
+        writes={
+            "app/client.py": BASE_FILES["app/client.py"].replace(
+                """import json
+import urllib.request""",
+                """import json
+import time
+import urllib.request""",
+            ).replace(
+                """        except Exception as exc:
+            last = exc
+    raise last""",
+                """        except Exception as exc:
+            last = exc
+            time.sleep(1)
+    raise last""",
+            ),
+        },
+    ),
+    Case(
+        name="clean_terse_docs",
+        defect=None,
+        message="Name the environment variables in the README",
+        writes={
+            "README.md": BASE_FILES["README.md"].replace(
+                "Configuration comes from the environment.",
+                """Configuration comes from the environment:
+
+- `LEDGER_BASE_URL`, the upstream ledger
+- `LEDGER_TIMEOUT`, seconds to wait on a request""",
+            ),
         },
     ),
     Case(
