@@ -5,6 +5,10 @@ one defect or none. The defect is the rule that should fire. Everything else
 about the commit is meant to look ordinary, because a defect that only shows up
 in an obviously broken commit tells you nothing about real ones.
 
+One clean case removes the same function as the silent_removal case and
+says why, so that the rule which reports an unexplained removal is tested on
+both sides of "unexplained" rather than only on the side that should fire.
+
 Two of the clean cases carry a one-line message over the same diff as a
 longer one, because a short accurate message is the commonest real commit and
 the likeliest thing for the message rule to mistake for a vague one.
@@ -212,6 +216,33 @@ import urllib.request""",
 - `LEDGER_BASE_URL`, the upstream ledger
 - `LEDGER_TIMEOUT`, seconds to wait on a request""",
             ),
+        },
+    ),
+    Case(
+        name="clean_explained_removal",
+        defect=None,
+        message=(
+            "Drop retry(), which nothing calls\n\n"
+            "fetch_balance() never went through it and there is no other caller, "
+            "so it has been dead since the module was written. The upstream client "
+            "library already retries."
+        ),
+        writes={
+            "app/client.py": BASE_FILES["app/client.py"]
+            .replace(
+                '''def retry(operation):
+    """Run operation, retrying on any failure up to MAX_RETRIES times."""
+    last = None
+    for _ in range(MAX_RETRIES):
+        try:
+            return operation()
+        except Exception as exc:
+            last = exc
+    raise last
+''',
+                "",
+            )
+            .replace("MAX_RETRIES = 3\n", ""),
         },
     ),
     Case(

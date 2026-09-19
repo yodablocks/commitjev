@@ -128,18 +128,21 @@ JEV_RULES: tuple[JevRule, ...] = (
     JevRule(
         id="unexplained_removal",
         title="unexplained removal",
+        # Only half the judgment. Whether the message accounts for the removal
+        # is REMOVAL_EXPLAINED, asked separately and joined in judge(); see the
+        # note above that question for why the two are not one.
         instructions=(
-            "Does `diff` delete existing working code, tests, or documentation "
-            "without `commit_message` giving a reason for the deletion?"
+            "Does `diff` remove a function, class, test, or block of "
+            "documentation that existed before?"
         ),
         true_means=(
-            "Something that was there and functioning is gone, and the message does "
-            "not say why. Code moved to another file in the same diff does not "
-            "count as deleted."
+            "A whole unit of code or documentation that was there is gone."
         ),
         false_means=(
-            "Nothing meaningful was removed, or the message explains the removal, "
-            "or the removed lines moved elsewhere in this same diff."
+            "Nothing whole was removed. A line whose value was edited in place is "
+            "not a removal, even though the diff shows the old line with a minus "
+            "sign in front of it. Lines that moved elsewhere in this same diff are "
+            "not removed either."
         ),
         good_when_yes=False,
         on_fail="Say why it went, or move it instead of deleting it.",
@@ -207,6 +210,38 @@ JEV_RULES: tuple[JevRule, ...] = (
     ),
 )
 
+# The other half of unexplained_removal, asked on its own.
+#
+# The two used to be one question: "does the diff delete working code without
+# the message giving a reason". Jev answered it by latching onto the first
+# half. On a commit that removes nothing and only edits two constants in place
+# it answered 0.81, above the 0.75 it gave the commit that really does delete a
+# function, so the rule had negative separation and was firing on the minus
+# signs a changed line produces. Splitting the halves and joining them in code
+# took that to 0.99 against 0.04. Jev is documented as reading literally and as
+# losing accuracy on indirection, and a compound condition is both.
+#
+# It is asked on every commit and read only when a removal was found, which
+# costs nothing extra: Jev evaluates every question for one state in parallel.
+REMOVAL_EXPLAINED = "removal_explained"
+REMOVAL_EXPLAINED_QUESTION = {
+    "type": "noul",
+    "instructions": (
+        "Does `commit_message` give a reason for taking something out of the code?"
+    ),
+    "criteria": {
+        "true": (
+            "The message says why something was removed, replaced, or is no longer "
+            "needed."
+        ),
+        "false": "The message never accounts for anything being taken out.",
+    },
+}
+# A removal is treated as explained on anything but a confident no, because the
+# cost of staying quiet about a removal someone did explain is a false alarm,
+# and the cost of the reverse is one line in a report they can dismiss.
+REMOVAL_EXPLAINED_MIN = FAIL
+
 HEADLINE_OPTIONS: dict[str, str] = {
     "none": (
         "Nothing here needs a reviewer. The message is accurate and the diff "
@@ -235,6 +270,7 @@ def questions() -> dict[str, dict]:
     """Every judgment for one commit, in one request."""
     qs = {rule.id: rule.question() for rule in JEV_RULES}
     qs["headline"] = HEADLINE_QUESTION
+    qs[REMOVAL_EXPLAINED] = REMOVAL_EXPLAINED_QUESTION
     return qs
 
 
@@ -360,6 +396,10 @@ class RuleResult:
     rule: JevRule
     noul: float
     verdict: str
+    # Set when a second question turned this finding off. The probability
+    # stays as the model gave it, so a suppressed result reads honestly under
+    # --all instead of looking like the model simply said no.
+    note: str | None = None
 
 
 @dataclass
@@ -393,6 +433,24 @@ class CommitReport:
         return HEADLINE_OPTIONS[self.headline]
 
 
+def _apply_removal_gate(results: list[RuleResult], answers: dict) -> None:
+    """A removal the message accounts for is not an unexplained removal.
+
+    unexplained_removal only asks whether something was removed. The second
+    half of its name is this: a separate question about the message, joined
+    here rather than inside the instruction, because Jev answers the compound
+    version by reading only the first half of it.
+    """
+    found = next((r for r in results if r.rule.id == "unexplained_removal"), None)
+    explained = answers.get(REMOVAL_EXPLAINED)
+    if found is None or explained is None or found.verdict == OK:
+        return
+    probability = float(explained["noul"])
+    if probability > REMOVAL_EXPLAINED_MIN:
+        found.verdict = OK
+        found.note = f"the message says why ({probability:.2f})"
+
+
 def judge(commit, answers: dict) -> CommitReport:
     """Turn one Jev response into a verdict. No inference happens here."""
     results = []
@@ -402,6 +460,8 @@ def judge(commit, answers: dict) -> CommitReport:
             continue
         noul = float(answer["noul"])
         results.append(RuleResult(rule, noul, rule.verdict(noul)))
+
+    _apply_removal_gate(results, answers)
 
     headline = answers.get("headline") or {}
     return CommitReport(

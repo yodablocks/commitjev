@@ -82,9 +82,14 @@ def separation_table(reports: dict[str, rules.CommitReport]) -> tuple[int, int]:
     defective commit is often right, because a commit with one planted defect
     frequently has a second real problem: the message that hides a credential
     also fails to describe the diff.
+
+    Whether a rule fired is read from the report rather than recomputed from
+    the probability, because a rule can be composed with a second question and
+    then its own number no longer decides the outcome on its own.
     """
     by_case_defect = {c.name: c.defect for c in case_data.CASES}
     misses, alarms = 0, 0
+    gated = []
 
     header = (f"{'rule':<22}{'own defect':>14}{'other defects':>15}"
               f"{'clean':>8}{'margin':>8}  fires")
@@ -98,35 +103,47 @@ def separation_table(reports: dict[str, rules.CommitReport]) -> tuple[int, int]:
                 continue
             defect = by_case_defect[name]
             bucket = own if defect == rule.id else (clean if defect is None else other)
-            bucket.append(hit.noul)
+            bucket.append((hit.noul, hit.verdict))
 
-        # "Loudest" is whichever end of the scale means the rule is complaining.
         loudest = min if rule.good_when_yes else max
-        quietest = max if rule.good_when_yes else min
+        nouls = lambda pairs: [n for n, _ in pairs]
 
         if not own:
-            print(f"{rule.title:<22}{'no case':>14}{loudest(other, default=0):>15.2f}"
-                  f"{loudest(clean, default=0):>8.2f}{'':>8}  untested")
+            print(f"{rule.title:<22}{'no case':>14}"
+                  f"{loudest(nouls(other), default=0):>15.2f}"
+                  f"{loudest(nouls(clean), default=0):>8.2f}{'':>8}  untested")
             continue
 
-        worst_own = loudest(own)
-        loudest_clean = loudest(clean, default=(1.0 if rule.good_when_yes else 0.0))
-        # Margin between the defect and the quietest thing it must beat.
-        margin = (loudest_clean - worst_own) if rule.good_when_yes else (worst_own - loudest_clean)
+        worst_own = loudest(nouls(own))
+        loudest_clean = loudest(
+            nouls(clean), default=(1.0 if rule.good_when_yes else 0.0)
+        )
+        margin = ((loudest_clean - worst_own) if rule.good_when_yes
+                  else (worst_own - loudest_clean))
 
-        fired_clean = sum(1 for v in clean if rule.verdict(v) != rules.OK)
+        fired_clean = sum(1 for _, v in clean if v != rules.OK)
         alarms += fired_clean
-        caught = all(rule.verdict(v) != rules.OK for v in own)
-        partly = any(rule.verdict(v) != rules.OK for v in own)
+        caught = all(v != rules.OK for _, v in own)
+        partly = any(v != rules.OK for _, v in own)
         if not caught:
             misses += 1
 
         label = "yes" if caught else ("some" if partly else "NO")
         if fired_clean:
             label += f", {fired_clean} false"
-        shown = " ".join(f"{v:.2f}" for v in sorted(own))
-        print(f"{rule.title:<22}{shown:>14}{loudest(other, default=0):>15.2f}"
+        # A composed rule can overlap on probability and still separate, because
+        # a second question decides. Say so rather than leaving a scary number.
+        if margin <= 0 and not fired_clean and caught:
+            label += ", composed"
+            gated.append(rule.title)
+        shown = " ".join(f"{n:.2f}" for n in sorted(nouls(own)))
+        print(f"{rule.title:<22}{shown:>14}{loudest(nouls(other), default=0):>15.2f}"
               f"{loudest_clean:>8.2f}{margin:>8.2f}  {label}")
+
+    for title in gated:
+        print(f"\n  {title}: its own probability does not separate the cases and is "
+              f"not meant to.\n  A second question decides, and the verdicts above "
+              f"are the ones the tool reports.")
     return misses, alarms
 
 
@@ -134,8 +151,8 @@ def per_case_table(reports: dict[str, rules.CommitReport]) -> int:
     """Did each case get the verdict its label says it should?"""
     by_case = {c.name: c for c in case_data.CASES}
     wrong = 0
-    print(f"\n{'case':<20}{'defect':<24}{'verdict':<10}fired")
-    print("-" * 92)
+    print(f"\n{'case':<24}{'defect':<24}{'verdict':<10}fired")
+    print("-" * 96)
     for name, report in reports.items():
         case = by_case[name]
         fired = [r.rule.id for r in report.results if r.verdict != rules.OK]
@@ -143,7 +160,7 @@ def per_case_table(reports: dict[str, rules.CommitReport]) -> int:
         ok = (case.defect in fired) if case.defect else not fired
         if not ok:
             wrong += 1
-        print(f"{name:<20}{case.defect or 'none':<24}{report.verdict:<10}"
+        print(f"{name:<24}{case.defect or 'none':<24}{report.verdict:<10}"
               f"{', '.join(fired) or '-'}{'' if ok else '   <- not as labelled'}")
     return wrong
 
@@ -158,8 +175,8 @@ def headline_table(reports: dict[str, rules.CommitReport]) -> None:
     """
     by_case = {c.name: c for c in case_data.CASES}
     right = considered = 0
-    print(f"\n{'case':<20}{'defect':<24}{'headline':<24}{'conf':>6}  spoke")
-    print("-" * 92)
+    print(f"\n{'case':<24}{'defect':<24}{'headline':<24}{'conf':>6}  spoke")
+    print("-" * 96)
     for name, report in reports.items():
         case = by_case[name]
         spoke = report.headline_text is not None
@@ -168,7 +185,7 @@ def headline_table(reports: dict[str, rules.CommitReport]) -> None:
             considered += 1
             right += agrees and spoke
         flag = "yes" if spoke else f"no, under {rules.HEADLINE_CONFIDENCE:.2f}"
-        print(f"{name:<20}{case.defect or 'none':<24}{report.headline or '-':<24}"
+        print(f"{name:<24}{case.defect or 'none':<24}{report.headline or '-':<24}"
               f"{report.headline_confidence:>6.2f}  {flag}")
     print(f"\nthe Choice named the planted defect on {right}/{considered} "
           f"defective commits")

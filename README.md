@@ -38,7 +38,7 @@ files, and the diff:
  "diff": "..."}
 ```
 
-Seven Nouls and one Choice ride in that single request and are evaluated in
+Eight Nouls and one Choice ride in that single request and are evaluated in
 parallel (`rules.py`):
 
 | id | good when | judgment |
@@ -46,7 +46,8 @@ parallel (`rules.py`):
 | `message_describes_diff` | yes | would the message give you the right idea of what changed |
 | `single_purpose` | yes | do all the edits serve one purpose |
 | `undisclosed_change` | no | does the diff change behaviour the message never mentions |
-| `unexplained_removal` | no | is working code gone with no reason given |
+| `unexplained_removal` | no | is a function, test or section of docs gone |
+| `removal_explained` | n/a | does the message give a reason for taking something out |
 | `debug_leftovers` | no | is there a stray print, a commented-out block, a hardcoded test value |
 | `new_dependency` | no | does the project now depend on a package it did not before |
 | `secret_material` | no | is a real credential in the diff |
@@ -63,6 +64,15 @@ or past 0.65 on its bad side warns; **anything in between is reported as
 "review" rather than rounded to a verdict**, because that band is a judgment
 the model did not actually make.
 
+`removal_explained` has no verdict of its own. It is the second half of
+`unexplained_removal`, joined in code rather than inside the instruction: asked
+as one compound question ("removed, and unexplained") Jev answered by reading
+only the first half, scoring 0.81 on a commit that removes nothing and edits
+two constants in place, above the 0.75 it gave the commit that really deletes a
+function. Split apart, the halves score 0.99 against 0.04. Jev is documented as
+reading literally and as losing accuracy on indirection, and a compound
+condition is both.
+
 A rule also carries a severity, because not every confident answer is a fault.
 `new_dependency` asks whether a dependency arrived, which is a fact worth a
 glance whether or not the message mentions it, so it reports at "review" no
@@ -78,9 +88,9 @@ report move. Editing a rule's wording changes the key and correctly re-asks.
 
 ## What it catches
 
-`calibrate.py` builds a throwaway repository, branches thirteen labelled
+`calibrate.py` builds a throwaway repository, branches fourteen labelled
 commits off one base, and runs the real pipeline over them. Eight carry
-exactly one planted defect and five are clean. Only the clean column measures
+exactly one planted defect and six are clean. Only the clean column measures
 a false alarm.
 
 ```
@@ -106,21 +116,22 @@ says "none" on all five clean ones at 0.91 confidence and above.
 
 ## A run over real history
 
-Its own sixteen commits, `jev-1.13.0`, 8 workers:
+Its own eighteen commits, `jev-1.13.0`, 8 workers:
 
-| commits | warnings | to review | time | cost |
-|---|---|---|---|---|
-| 16 | 3 | 4 | 3.9 s | $0.0017 |
+| commits | warnings | to review | skipped | time | cost |
+|---|---|---|---|---|---|
+| 18 | 3 | 5 | 1 | 4.3 s | $0.0019 |
 
 Two of the warnings are `single_purpose` on commits that really did two
 things: "Record that Jev's answers move between runs" also corrected a
 filename in the same README, and "Keep the diff out of the message" also fixed
-a stale sentence. They score 0.32 and 0.18. Both should have been two commits,
-and the tool is right about both.
+a stale sentence. Both should have been two commits, and the tool is right
+about both.
 
 The third is the code-side credential check firing on the first commit, which
 carried a key-shaped string in a test fixture until a later commit took it
-out. That is the check working, on a repository that has since fixed it.
+out. That is the check working, on a repository that has since fixed it. The
+skipped one is a merge commit.
 
 ## What it is not
 
@@ -129,11 +140,13 @@ out. That is the check working, on a repository that has since fixed it.
   four rules. Read the report as how many ways a commit is off, not as four
   separate findings, and read the headline Choice for the one that matters.
 
-- **`unexplained_removal` misreads a changed constant as a deletion.** On the
-  wrong-message case, which changes two constants and removes nothing, it
-  answers 0.83. Jev is documented as reading literally, and an old value
-  vanishing from a line apparently looks enough like a removal. Treat that
-  rule as the weakest of the seven.
+- **`unexplained_removal` cannot be read from its own probability.** It
+  answers 0.99 on the commit that deletes a function and 0.99 on the commit
+  that deletes the same function and says why, because all it asks is whether
+  something was removed. `removal_explained` decides between them in code.
+  Anything reading the raw numbers, including the margin column in
+  `calibrate.py`, sees no separation at all for this rule, which is why that
+  table reports verdicts rather than probabilities.
 
 - **`new_dependency` fires whether or not the message names the dependency.**
   The first commit here adds `typesafe_sdk` and its message says so in as many
@@ -151,8 +164,8 @@ out. That is the check working, on a repository that has since fixed it.
   subject joined two changes with an "and", scored 0.66 and passed by a
   hundredth. The calibration margins are an upper bound, not a floor.
 
-- **Five clean commits is a small control group.** Zero false alarms across
-  five hand-written commits is weak evidence. Run `calibrate.py` with cases of
+- **Six clean commits is a small control group.** Zero false alarms across
+  six hand-written commits is weak evidence. Run `calibrate.py` with cases of
   your own before trusting the thresholds on a codebase that matters.
 
 - **Large commits are judged on a fraction of themselves.** The diff is capped
@@ -163,8 +176,10 @@ out. That is the check working, on a repository that has since fixed it.
 
 - **Jev is not deterministic, and the cache freezes whichever answer came
   first.** Over four runs of the thirteen calibration cases the spread per
-  rule is 0.01 to 0.09, and two case-and-rule pairs change verdict between
-  runs, both of them `unexplained_removal`. On the much larger commit that
+  rule is 0.01 to 0.06, and no case-and-rule pair changes verdict between runs.
+  Before `unexplained_removal` was split into two questions it was 0.09 with
+  two flips, both of them that rule, so the compound question was the unstable
+  one as well as the wrong one. On the much larger commit that
   added this tool, `new_dependency` ranged 0.58 to 0.76 across six runs of
   byte-identical state, straddling the threshold, so that commit warns on some
   runs and passes on others. Variance looks worse on large truncated diffs
@@ -192,11 +207,11 @@ out. That is the check working, on a repository that has since fixed it.
 ## Files
 
 - `commitjev.py` the CLI and the pipeline
-- `rules.py` the seven judgments, the six code checks, and the thresholds
+- `rules.py` the judgments, the six code checks, and the thresholds
 - `gitio.py` reading commits out of git and capping the diff
 - `client.py` the SDK wrapper, the SQLite cache, the thread pool
 - `report.py` terminal, markdown, and JSON output
-- `cases.py` thirteen labelled commits, `calibrate.py` the measurement
+- `cases.py` fourteen labelled commits, `calibrate.py` the measurement
 - `test_rules.py` offline tests, `python3 test_rules.py`
 - `hooks/commit-msg` a sample hook, copy it in yourself
 
