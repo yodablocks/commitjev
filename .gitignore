@@ -2,3 +2,4 @@
 __pycache__/
 *.pyc
 .calibrate-cache.sqlite3*
+.commitjev/
