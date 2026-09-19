@@ -180,3 +180,5 @@ entry below.
 - `cases.py` thirteen labelled commits, `calibrate.py` the measurement
 - `test_rules.py` offline tests, `python3 test_rules.py`
 - `hooks/commit-msg` a sample hook, copy it in yourself
+
+MIT licensed.
