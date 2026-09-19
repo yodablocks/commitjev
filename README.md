@@ -9,6 +9,7 @@ python3 commitjev.py HEAD~10..HEAD        # judge a range
 python3 commitjev.py --staged             # judge what you are about to commit
 python3 commitjev.py HEAD --markdown      # paste into a pull request
 python3 calibrate.py                      # measure what it catches
+python3 calibrate.py --repeat 4           # measure how much the answers move
 ```
 
 Needs Python 3.12, `typesafe_sdk`, and a key in `TYPESAFE_API_KEY` (or `.env`,
@@ -130,9 +131,19 @@ answer: those messages were written with care.
   under a third of it reached the model. The state says when it was truncated,
   but a rule cannot see what was cut.
 
+- **Jev is not deterministic, and the cache freezes whichever answer came
+  first.** Over four runs of the thirteen calibration cases the spread per
+  rule is 0.01 to 0.09, and two case-and-rule pairs change verdict between
+  runs, both of them `unexplained_removal`. On the much larger commit that
+  added this tool, `new_dependency` ranged 0.58 to 0.76 across six runs of
+  byte-identical state, straddling the threshold, so that commit warns on some
+  runs and passes on others. Variance looks worse on large truncated diffs
+  than on small focused ones. `calibrate.py --repeat N` measures it.
+
 - **The credential regex cannot tell a fixture from a key.** It fires on the
-  synthetic AWS key in `cases.py`, correctly by its own lights. That is the
-  right failure direction for a credential check and it is left alone.
+  credential-shaped test data in `test_rules.py` and `cases.py`, correctly by
+  its own lights. That is the right failure direction for a credential check,
+  so it is left alone rather than weakened to quiet the tool's own tests.
 
 - **Your diffs go to TypeSafe.** Read their data terms before pointing this at
   a private repository.
