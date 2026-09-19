@@ -12,9 +12,19 @@ python3 calibrate.py                      # measure what it catches
 python3 calibrate.py --repeat 4           # measure how much the answers move
 ```
 
+Point it at any repository with `-C`, or install it as a commit-msg hook so
+it runs on the commit you are about to make:
+
+```
+cp hooks/commit-msg /your/project/.git/hooks/commit-msg
+chmod +x /your/project/.git/hooks/commit-msg
+export COMMITJEV=$PWD/commitjev.py
+```
+
 Needs Python 3.12, `typesafe_sdk`, and a key in `TYPESAFE_API_KEY` (or `.env`,
 see `.env.example`). Exit status is 0 when nothing warns, 1 when something
-does, 2 when the run itself failed.
+does, 2 when the run itself failed. The hook blocks only on a warning: not
+being able to check a commit is not a reason to refuse it.
 
 ## How it works
 
@@ -91,17 +101,20 @@ says "none" on all five clean ones at 0.91 confidence and above.
 
 ## A run over real history
 
-The twelve commits that were in this repository before the tool existed,
-`jev-1.13.0`, 8 workers:
+Its own nine commits, `jev-1.13.0`, 8 workers:
 
 | commits | warnings | to review | time | cost |
 |---|---|---|---|---|
-| 12 | 2 | 2 | 3.3 s | $0.0014 |
+| 9 | 3 | 1 | 3.0 s | $0.0011 |
 
-It flagged the commit that added `requests` as a new dependency the message
-did not mention (0.91), and it flagged `d863fc3` for changing behaviour the
-message skipped (0.65). Everything else came out clean, which is the right
-answer: those messages were written with care.
+Two of those warnings are `single_purpose` on commits that really did two
+things: "Record that Jev's answers move between runs" also corrected a
+filename in the same README, and "Keep the diff out of the message" also fixed
+a stale sentence. They score 0.31 and 0.19. Both should have been two commits,
+and the tool is right about both.
+
+The third warning is a false positive worth understanding, and it has its own
+entry below.
 
 ## What it is not
 
@@ -116,11 +129,19 @@ answer: those messages were written with care.
   vanishing from a line apparently looks enough like a removal. Treat that
   rule as the weakest of the seven.
 
-- **The synthetic defects are easier than real ones.** The planted bundled
-  commit scores 0.16 on `single_purpose`. The one genuinely bundled commit in
-  this repository, "Ring every company over 50% in red **and** make the
-  shortlist scroll sideways", scores 0.66 and passes by a hundredth. The
-  calibration margins are an upper bound on what to expect from real history.
+- **`new_dependency` fires whether or not the message names the dependency.**
+  The first commit here adds `typesafe_sdk` and its message says so in as many
+  words, and the rule still answers 0.77. The question it asks is "does this
+  add a dependency", which is honestly yes; the fix text it prints is about
+  disclosure, which is a different question. Read it as a notification, not a
+  violation, or reword the rule so it asks what the fix text implies.
+
+- **The synthetic defects are easier than real ones, by an amount that
+  varies.** The planted bundled commit scores 0.16 on `single_purpose`, and
+  the two genuinely bundled commits in this repository score 0.19 and 0.31,
+  which transfers well. But a bundled commit in another repository, whose
+  subject joined two changes with an "and", scored 0.66 and passed by a
+  hundredth. The calibration margins are an upper bound, not a floor.
 
 - **Five clean commits is a small control group.** Zero false alarms across
   five hand-written commits is weak evidence. Run `calibrate.py` with cases of
