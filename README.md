@@ -61,7 +61,12 @@ those questions would only add noise and cost.
 Code owns every threshold. A Noul at or past 0.65 on its good side passes; at
 or past 0.65 on its bad side warns; **anything in between is reported as
 "review" rather than rounded to a verdict**, because that band is a judgment
-the model did not actually make. The Choice only picks the line shown first,
+the model did not actually make.
+
+A rule also carries a severity, because not every confident answer is a fault.
+`new_dependency` asks whether a dependency arrived, which is a fact worth a
+glance whether or not the message mentions it, so it reports at "review" no
+matter how sure it is and never fails a run by itself. The other six warn. The Choice only picks the line shown first,
 and only when its confidence clears 0.50. The two are never mixed: Jev's own
 notes say a Choice is relative (which problem is worst) while each Noul is
 absolute (is this problem there at all), so the Nouls decide every verdict.
@@ -101,20 +106,21 @@ says "none" on all five clean ones at 0.91 confidence and above.
 
 ## A run over real history
 
-Its own nine commits, `jev-1.13.0`, 8 workers:
+Its own sixteen commits, `jev-1.13.0`, 8 workers:
 
 | commits | warnings | to review | time | cost |
 |---|---|---|---|---|
-| 9 | 3 | 1 | 3.0 s | $0.0011 |
+| 16 | 3 | 4 | 3.9 s | $0.0017 |
 
-Two of those warnings are `single_purpose` on commits that really did two
+Two of the warnings are `single_purpose` on commits that really did two
 things: "Record that Jev's answers move between runs" also corrected a
 filename in the same README, and "Keep the diff out of the message" also fixed
-a stale sentence. They score 0.31 and 0.19. Both should have been two commits,
+a stale sentence. They score 0.32 and 0.18. Both should have been two commits,
 and the tool is right about both.
 
-The third warning is a false positive worth understanding, and it has its own
-entry below.
+The third is the code-side credential check firing on the first commit, which
+carried a key-shaped string in a test fixture until a later commit took it
+out. That is the check working, on a repository that has since fixed it.
 
 ## What it is not
 
@@ -131,10 +137,12 @@ entry below.
 
 - **`new_dependency` fires whether or not the message names the dependency.**
   The first commit here adds `typesafe_sdk` and its message says so in as many
-  words, and the rule still answers 0.77. The question it asks is "does this
-  add a dependency", which is honestly yes; the fix text it prints is about
-  disclosure, which is a different question. Read it as a notification, not a
-  violation, or reword the rule so it asks what the fix text implies.
+  words, and the rule still answers 0.66. The question it asks is "does this
+  add a dependency", which is honestly yes. Asking "added without saying so"
+  instead would need the indirection Jev is documented as handling less
+  reliably, so the question stayed and its severity changed: it reports at
+  "review" and never fails a run alone. Expect it on any commit that adds an
+  import, and read it as a notification.
 
 - **The synthetic defects are easier than real ones, by an amount that
   varies.** The planted bundled commit scores 0.16 on `single_purpose`, and
