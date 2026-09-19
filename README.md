@@ -91,7 +91,8 @@ says "none" on all five clean ones at 0.91 confidence and above.
 
 ## A run over real history
 
-The twelve commits of this repository, `jev-1.13.0`, 8 workers:
+The twelve commits that were in this repository before the tool existed,
+`jev-1.13.0`, 8 workers:
 
 | commits | warnings | to review | time | cost |
 |---|---|---|---|---|

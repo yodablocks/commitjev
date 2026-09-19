@@ -23,6 +23,7 @@ import report as render
 import rules
 
 DEFAULT_RANGE = "HEAD~10..HEAD"
+SCISSORS = ">8"          # git's marker for "everything below is not the message"
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -76,10 +77,19 @@ def collect(args: argparse.Namespace, root: Path) -> list[gitio.Commit]:
 
 
 def _strip_comments(message: str) -> str:
-    """git hands hooks the editor buffer, comments and all."""
-    return "\n".join(
-        line for line in message.splitlines() if not line.startswith("#")
-    ).strip()
+    """Recover the message from the editor buffer git hands a hook.
+
+    Under `git commit -v` the buffer carries a scissors line and then the whole
+    diff below it as plain text. Stripping only the comment lines would leave
+    that diff sitting in the commit body, and the rule that asks whether the
+    message describes the diff would be reading the diff as the message.
+    """
+    lines = message.splitlines()
+    for i, line in enumerate(lines):
+        if line.startswith("#") and SCISSORS in line:
+            lines = lines[:i]
+            break
+    return "\n".join(line for line in lines if not line.startswith("#")).strip()
 
 
 def run(args: argparse.Namespace) -> int:

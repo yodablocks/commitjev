@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import sys
 
+import commitjev
 import gitio
 import rules
 from rules import OK, REVIEW, WARN
@@ -111,6 +112,26 @@ def test_skipped_commits_never_fail_a_run():
         headline_confidence=0.0, skipped="merge commit",
     )
     assert report.verdict == OK
+
+
+def test_verbose_buffer_does_not_smuggle_the_diff_into_the_message():
+    buffer = """Add two lines
+
+# Please enter the commit message for your changes.
+#
+# ------------------------ >8 ------------------------
+# Do not modify or remove the line above.
+diff --git a/a.txt b/a.txt
+@@ -1 +1,3 @@
+ one
++two
+"""
+    assert commitjev._strip_comments(buffer) == "Add two lines"
+
+
+def test_plain_buffer_keeps_the_body():
+    buffer = "Add two lines\n\nThe file had one.\n# a comment\n"
+    assert commitjev._strip_comments(buffer) == "Add two lines\n\nThe file had one."
 
 
 def test_diff_truncation_caps_each_file_and_marks_the_cut():
