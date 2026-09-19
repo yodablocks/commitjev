@@ -69,7 +69,9 @@ def test_deleted_file_warns():
 
 
 def test_secret_regex_ignores_placeholders():
-    real = ["API_KEY = 'sk-abcd1234efgh5678ijkl9012'"]
+    # Joined here so no string shaped like a live key sits in this file, which
+    # would otherwise raise a secret-scanning alert on a public repository.
+    real = ["API_KEY = '" + "sk-" + "abcd1234efgh5678ijkl9012" + "'"]
     assert rules._secret_hits(real)
     fake = [
         "TYPESAFE_API_KEY=your-key-here",
