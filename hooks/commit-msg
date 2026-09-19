@@ -5,14 +5,18 @@
 #   chmod +x .git/hooks/commit-msg
 #
 # git passes the message file as $1, and the changes are already staged, so the
-# hook sees exactly the commit about to be made. A non-zero exit stops it.
+# hook sees exactly the commit about to be made.
 #
-# It warns and stops by default. To let it speak without blocking, drop the
-# "|| exit 1" below. To make anything Jev was unsure about stop the commit too,
-# add --strict.
+# Only a warning stops the commit. commitjev failing to run does not, because
+# no API key and no network are reasons you cannot be checked, not reasons your
+# commit is bad. Add --strict below to stop on anything Jev was unsure about.
 
 COMMITJEV="$(git rev-parse --show-toplevel)/jevtools/commitjev/commitjev.py"
 
 [ -x "$COMMITJEV" ] || exit 0          # not installed here, do not block anyone
 
-python3 "$COMMITJEV" --staged --message-file "$1" || exit 1
+python3 "$COMMITJEV" --staged --message-file "$1"
+status=$?
+
+[ "$status" -eq 1 ] && exit 1          # 1 is a warning, 2 is commitjev itself failing
+exit 0
