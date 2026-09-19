@@ -1,19 +1,22 @@
 #!/bin/sh
-# commitjev as a commit-msg hook. Copy it in yourself:
+# commitjev as a commit-msg hook, for any repository you want checked.
 #
-#   cp jevtools/commitjev/hooks/commit-msg .git/hooks/commit-msg
+#   cp /path/to/commitjev/hooks/commit-msg .git/hooks/commit-msg
 #   chmod +x .git/hooks/commit-msg
+#   # then either edit COMMITJEV below, or export it in your shell:
+#   export COMMITJEV=/path/to/commitjev/commitjev.py
 #
 # git passes the message file as $1, and the changes are already staged, so the
-# hook sees exactly the commit about to be made.
+# hook sees exactly the commit about to be made. It runs with the repository
+# being committed to as the working directory, which is the one it judges.
 #
 # Only a warning stops the commit. commitjev failing to run does not, because
 # no API key and no network are reasons you cannot be checked, not reasons your
 # commit is bad. Add --strict below to stop on anything Jev was unsure about.
 
-COMMITJEV="$(git rev-parse --show-toplevel)/jevtools/commitjev/commitjev.py"
+COMMITJEV="${COMMITJEV:-/path/to/commitjev/commitjev.py}"
 
-[ -x "$COMMITJEV" ] || exit 0          # not installed here, do not block anyone
+[ -f "$COMMITJEV" ] || exit 0          # not pointed anywhere, do not block anyone
 
 python3 "$COMMITJEV" --staged --message-file "$1"
 status=$?
