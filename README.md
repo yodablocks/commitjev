@@ -175,6 +175,17 @@ out. That is the check working, on a repository that has since fixed it.
   its own lights. That is the right failure direction for a credential check,
   so it is left alone rather than weakened to quiet the tool's own tests.
 
+- **The probabilities are Jev's, and Jev has measured weak spots.**
+  [jev-orderby-bench](https://github.com/yodablocks/jev-orderby-bench) is an
+  independent measurement of the same model, by me, and it is worth reading
+  before trusting a number here. Two of its results shaped this tool: the same
+  rows batched many-to-a-request rank worse than one per request, which is why
+  commitjev sends one commit per call; and the probabilities come back at two
+  decimals and tie heavily, which is why nothing here sorts by them and every
+  verdict is a threshold instead. On a hard graded-relevance probe the model
+  fails four of six gates, so treat the middle band as genuinely uncertain
+  rather than as a number you could round.
+
 - **Your diffs go to TypeSafe.** Read their data terms before pointing this at
   a private repository.
 
