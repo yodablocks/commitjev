@@ -58,7 +58,8 @@ def test_every_rule_id_is_a_headline_option():
 
 def test_questions_are_well_formed():
     qs = rules.questions()
-    assert len(qs) == len(rules.JEV_RULES) + 1
+    # One per rule, plus the headline Choice and the removal companion.
+    assert len(qs) == len(rules.JEV_RULES) + 2
     for qid, q in qs.items():
         assert q["type"] in ("noul", "choice")
         assert q["instructions"] and isinstance(q["instructions"], str)
@@ -116,6 +117,40 @@ def test_headline_is_silent_when_the_choice_is_unsure():
     assert report.headline_text is None
     report.headline_confidence = 0.9
     assert report.headline_text == rules.HEADLINE_OPTIONS["single_purpose"]
+
+
+def _removal_results(noul=0.95):
+    rule = next(r for r in rules.JEV_RULES if r.id == "unexplained_removal")
+    return [rules.RuleResult(rule, noul, rule.verdict(noul))]
+
+
+def test_an_explained_removal_is_not_reported():
+    results = _removal_results()
+    assert results[0].verdict == WARN
+    rules._apply_removal_gate(results, {rules.REMOVAL_EXPLAINED: {"noul": 0.90}})
+    assert results[0].verdict == OK
+    assert results[0].noul == 0.95, "the probability is not rewritten, only the verdict"
+    assert "0.90" in results[0].note
+
+
+def test_an_unexplained_removal_still_warns():
+    results = _removal_results()
+    rules._apply_removal_gate(results, {rules.REMOVAL_EXPLAINED: {"noul": 0.05}})
+    assert results[0].verdict == WARN and results[0].note is None
+
+
+def test_the_gate_does_not_invent_a_finding():
+    rule = next(r for r in rules.JEV_RULES if r.id == "unexplained_removal")
+    results = [rules.RuleResult(rule, 0.02, rule.verdict(0.02))]
+    rules._apply_removal_gate(results, {rules.REMOVAL_EXPLAINED: {"noul": 0.01}})
+    assert results[0].verdict == OK, "nothing removed stays nothing removed"
+    assert results[0].note is None
+
+
+def test_the_gate_is_a_no_op_without_its_companion_answer():
+    results = _removal_results()
+    rules._apply_removal_gate(results, {})
+    assert results[0].verdict == WARN, "a missing answer must not clear a finding"
 
 
 def test_skipped_commits_never_fail_a_run():

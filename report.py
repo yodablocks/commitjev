@@ -53,7 +53,9 @@ def terminal(reports: list, usage, elapsed: float, show_all: bool,
                 f"  {paint(MARK[result.verdict], COLOR[result.verdict])}  "
                 f"{result.rule.title:<22} {result.noul:.2f}"
             )
-            if result.verdict != OK:
+            if result.note:
+                line += "  " + paint(result.note, DIM)
+            elif result.verdict != OK:
                 line += "  " + paint(result.rule.on_fail, DIM)
             print(line, file=stream)
 
@@ -134,7 +136,7 @@ def as_json(reports: list, usage, elapsed: float, model: str) -> str:
                 "headline_confidence": r.headline_confidence,
                 "rules": [
                     {"id": x.rule.id, "title": x.rule.title,
-                     "noul": x.noul, "verdict": x.verdict}
+                     "noul": x.noul, "verdict": x.verdict, "note": x.note}
                     for x in r.results
                 ],
                 "code_checks": [
