@@ -46,6 +46,11 @@ class JevRule:
     false_means: str
     good_when_yes: bool
     on_fail: str
+    # What a confident answer on the bad side means for the run. Most rules
+    # describe something that should not be in a commit, so they warn. A rule
+    # that only reports a fact worth a glance, however sure it is, is REVIEW:
+    # it belongs in the report without failing the run.
+    severity: str = "warn"
 
     def question(self) -> dict:
         return {
@@ -56,9 +61,9 @@ class JevRule:
 
     def verdict(self, noul: float) -> str:
         if noul >= PASS:
-            return OK if self.good_when_yes else WARN
+            return OK if self.good_when_yes else self.severity
         if noul <= FAIL:
-            return WARN if self.good_when_yes else OK
+            return self.severity if self.good_when_yes else OK
         return REVIEW
 
 
@@ -175,7 +180,12 @@ JEV_RULES: tuple[JevRule, ...] = (
             "the standard library or from this project's own modules."
         ),
         good_when_yes=False,
-        on_fail="Name the new dependency in the message and install it yourself.",
+        on_fail="Check this is a dependency you meant to add.",
+        # Asks whether a dependency arrived, which is a fact, not a fault. A
+        # commit that adds one and says so is fine, and the question cannot be
+        # reworded to "added without saying so" without the indirection that
+        # Jev is documented as answering less reliably. So it reports.
+        severity=REVIEW,
     ),
     JevRule(
         id="secret_material",

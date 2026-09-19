@@ -34,6 +34,16 @@ def test_verdict_directions():
     assert bad.verdict(0.10) == OK
 
 
+def test_a_reporting_rule_never_warns():
+    rule = next(r for r in rules.JEV_RULES if r.severity == REVIEW)
+    assert rule.verdict(0.99) == REVIEW, "however sure, it only reports"
+    assert rule.verdict(0.50) == REVIEW
+    assert rule.verdict(0.01) == OK, "the good side is still a pass"
+    assert all(r.verdict(0.99) == WARN
+               for r in rules.JEV_RULES
+               if not r.good_when_yes and r.severity == WARN)
+
+
 def test_thresholds_are_inclusive_on_the_good_side():
     good = next(r for r in rules.JEV_RULES if r.good_when_yes)
     assert good.verdict(rules.PASS) == OK

@@ -114,10 +114,10 @@ def separation_table(reports: dict[str, rules.CommitReport]) -> tuple[int, int]:
         # Margin between the defect and the quietest thing it must beat.
         margin = (loudest_clean - worst_own) if rule.good_when_yes else (worst_own - loudest_clean)
 
-        fired_clean = sum(1 for v in clean if rule.verdict(v) == rules.WARN)
+        fired_clean = sum(1 for v in clean if rule.verdict(v) != rules.OK)
         alarms += fired_clean
-        caught = all(rule.verdict(v) == rules.WARN for v in own)
-        partly = any(rule.verdict(v) == rules.WARN for v in own)
+        caught = all(rule.verdict(v) != rules.OK for v in own)
+        partly = any(rule.verdict(v) != rules.OK for v in own)
         if not caught:
             misses += 1
 
@@ -138,8 +138,8 @@ def per_case_table(reports: dict[str, rules.CommitReport]) -> int:
     print("-" * 92)
     for name, report in reports.items():
         case = by_case[name]
-        fired = [r.rule.id for r in report.results if r.verdict == rules.WARN]
-        fired += [f.check for f in report.findings if f.verdict == rules.WARN]
+        fired = [r.rule.id for r in report.results if r.verdict != rules.OK]
+        fired += [f.check for f in report.findings if f.verdict != rules.OK]
         ok = (case.defect in fired) if case.defect else not fired
         if not ok:
             wrong += 1
