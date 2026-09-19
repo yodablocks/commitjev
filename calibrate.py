@@ -174,12 +174,68 @@ def headline_table(reports: dict[str, rules.CommitReport]) -> None:
           f"defective commits")
 
 
+def stability_table(root: Path, built: list, repeat: int, model: str) -> None:
+    """Ask the same questions about the same commits several times over.
+
+    Jev is not deterministic. Most rules barely move, but a rule that wanders
+    across a threshold makes the same commit pass on one run and warn on the
+    next, which matters for something that gates a commit. The cache hides
+    this: whichever answer arrives first is the one that sticks.
+    """
+    # Inside the throwaway repo, so the writes go away with it. Never read from.
+    jev = client.Jev(
+        cache_path=root / ".stability-cache.sqlite3", model=model, use_cache=False
+    )
+    questions = rules.questions()
+    commits = [gitio.read_commit(sha, root) for _, sha in built]
+    samples: dict[tuple[str, str], list[float]] = {}
+
+    try:
+        for _ in range(repeat):
+            outcomes = client.in_parallel(
+                commits, lambda c: jev.ask(c.state(), questions), workers=8
+            )
+            for (case, _), answers in zip(built, outcomes):
+                if isinstance(answers, Exception):
+                    continue
+                for rule in rules.JEV_RULES:
+                    if rule.id in answers:
+                        samples.setdefault((case.name, rule.id), []).append(
+                            float(answers[rule.id]["noul"])
+                        )
+    finally:
+        jev.close()
+
+    header = f"\n{'rule':<22}{'widest spread':>15}{'where':>18}  verdict flips"
+    print(header)
+    print("-" * (len(header) - 1))
+    total_flips = 0
+    for rule in rules.JEV_RULES:
+        mine = {case: v for (case, rid), v in samples.items() if rid == rule.id}
+        if not mine:
+            continue
+        widest_case = max(mine, key=lambda c: max(mine[c]) - min(mine[c]))
+        widest = max(mine[widest_case]) - min(mine[widest_case])
+        flips = sum(
+            1 for v in mine.values() if len({rule.verdict(x) for x in v}) > 1
+        )
+        total_flips += flips
+        print(f"{rule.title:<22}{widest:>15.2f}{widest_case:>18}  "
+              f"{flips or '-'}")
+    print(f"\n{repeat} runs over {len(built)} commits, "
+          f"{total_flips} case and rule pairs changed verdict between runs, "
+          f"${jev.usage.cost_usd:.4f}")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--keep", action="store_true",
                         help="leave the throwaway repository in place")
     parser.add_argument("--no-cache", action="store_true")
     parser.add_argument("--model", default=client.DEFAULT_MODEL)
+    parser.add_argument("--repeat", type=int, default=1, metavar="N",
+                        help="ask N times with the cache off and report how much "
+                             "the answers move between runs")
     args = parser.parse_args(argv)
 
     root = Path(tempfile.mkdtemp(prefix="commitjev-calibrate-"))
@@ -194,6 +250,9 @@ def main(argv: list[str] | None = None) -> int:
             reports = judge_all(root, built, jev)
         finally:
             jev.close()
+
+        if args.repeat > 1:
+            stability_table(root, built, args.repeat, args.model)
 
         misses, alarms = separation_table(reports)
         wrong = per_case_table(reports)
