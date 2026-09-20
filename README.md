@@ -148,6 +148,15 @@ skipped one is a merge commit.
   four rules. Read the report as how many ways a commit is off, not as four
   separate findings, and read the headline Choice for the one that matters.
 
+- **A compound question is worth catching before it ships.** The rule below
+  was one: it asked whether something was deleted *without* the message
+  explaining it, and Jev answered the first half. That kind of mistake is
+  visible in the text, and
+  [jevq](https://github.com/yodablocks/jevq) now checks for it and eight
+  other documented failure modes without calling the API. Run it on this
+  project with `jevq --from rules:questions`. It still flags
+  `single_purpose`, which is fair.
+
 - **`unexplained_removal` cannot be read from its own probability.** It
   answers 0.99 on the commit that deletes a function and 0.99 on the commit
   that deletes the same function and says why, because all it asks is whether
