@@ -17,6 +17,14 @@ from pathlib import Path
 MAX_LINES_PER_FILE = 120
 MAX_LINES_TOTAL = 400
 
+# And in characters, because a line cap alone does not bound anything. A data
+# file, a lockfile or minified source is a handful of enormously long lines, so
+# 400 of them can be a hundred times the state Jev accepts. Roughly four
+# characters per token against a 32k state budget, kept well under it because
+# the questions share that budget.
+MAX_CHARS_PER_LINE = 2_000
+MAX_CHARS_TOTAL = 60_000
+
 # A literal separator cannot go in argv, so git is asked to emit 0x1f itself.
 SEP_FORMAT = "%x1f"
 SEP = "\x1f"
@@ -210,8 +218,17 @@ def truncate_diff(
     raw: str,
     per_file: int = MAX_LINES_PER_FILE,
     total: int = MAX_LINES_TOTAL,
+    per_line: int = MAX_CHARS_PER_LINE,
+    total_chars: int = MAX_CHARS_TOTAL,
 ) -> tuple[str, bool]:
-    """Cap the diff per file and overall. Returns the text and whether it was cut."""
+    """Cap the diff per file and overall, by line count and by size.
+
+    Both caps are needed. Counting lines bounds an ordinary source diff, and
+    counting characters bounds the one that is four lines of minified
+    JavaScript. Without the second, a commit touching a data file is rejected
+    by the API for exceeding the state budget, and the run reports nothing at
+    all for that commit.
+    """
     if not raw.strip():
         return "", False
 
@@ -224,18 +241,31 @@ def truncate_diff(
     kept: list[str] = []
     truncated = False
     budget = total
+    chars_left = total_chars
+
     for section in sections:
         allowance = min(per_file, budget)
-        if allowance <= 0:
+        if allowance <= 0 or chars_left <= 0:
             truncated = True
             break
+
+        shown = section[:allowance]
         if len(section) > allowance:
-            cut = len(section) - allowance
-            kept.extend(section[:allowance])
-            kept.append(f"... {cut} more lines of this file not shown ...")
             truncated = True
-            budget -= allowance
-        else:
-            kept.extend(section)
-            budget -= len(section)
+
+        for line in shown:
+            if len(line) > per_line:
+                line = line[:per_line] + f" ... {len(line) - per_line} more characters"
+                truncated = True
+            if len(line) > chars_left:
+                kept.append("... the rest of this diff is too large to show ...")
+                return "\n".join(kept), True
+            kept.append(line)
+            chars_left -= len(line) + 1
+
+        if len(section) > allowance:
+            kept.append(f"... {len(section) - allowance} more lines of this file "
+                        f"not shown ...")
+        budget -= len(shown)
+
     return "\n".join(kept), truncated

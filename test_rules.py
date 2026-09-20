@@ -194,6 +194,38 @@ def test_diff_truncation_caps_each_file_and_marks_the_cut():
     assert "more lines of this file not shown" in text
 
 
+def test_a_few_enormous_lines_are_capped_by_size():
+    """The failure this cap exists for: few lines, far too many characters.
+
+    A data file or minified source is a handful of very long lines, so the
+    line caps alone let through a state the API refuses outright, and the run
+    then reports nothing at all for that commit.
+    """
+    raw = "diff --git a/d.tsv b/d.tsv\n" + "\n".join(
+        "+" + "x" * 64_000 for _ in range(400)
+    )
+    text, truncated = gitio.truncate_diff(raw)
+    assert truncated
+    assert len(raw) > 25_000_000, "the fixture should be genuinely huge"
+    assert len(text) <= gitio.MAX_CHARS_TOTAL + 200, len(text)
+
+
+def test_one_long_line_is_cut_not_dropped():
+    raw = "diff --git a/a.js b/a.js\n+" + "y" * 10_000
+    text, truncated = gitio.truncate_diff(raw)
+    assert truncated
+    assert "more characters" in text
+    assert text.startswith("diff --git"), "the header still has to survive"
+
+
+def test_size_caps_leave_an_ordinary_diff_alone():
+    raw = "diff --git a/a.py b/a.py\n" + "\n".join(
+        f"+line {i}" for i in range(20)
+    )
+    text, truncated = gitio.truncate_diff(raw)
+    assert not truncated and text == raw
+
+
 def test_short_diff_is_left_alone():
     text, truncated = gitio.truncate_diff("diff --git a/a b/a\n+one\n+two")
     assert not truncated and text.count("\n") == 2
