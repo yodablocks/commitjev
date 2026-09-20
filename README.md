@@ -186,8 +186,10 @@ skipped one is a merge commit.
   your own before trusting the thresholds on a codebase that matters.
 
 - **Large commits are judged on a fraction of themselves.** The diff is capped
-  at 120 lines per file and 400 overall, because Jev loses accuracy as the
-  state fills with detail. The commit that added this tool was 1363 lines, so
+  at 120 lines per file and 400 overall, and at 2000 characters per line and
+  60000 overall, because Jev loses accuracy as the state fills with detail.
+  Both kinds of cap are needed: counting lines bounds a source diff, counting
+  characters bounds the one that is four lines of minified JavaScript. The commit that added this tool was 1363 lines, so
   under a third of it reached the model. The state says when it was truncated,
   but a rule cannot see what was cut.
 
